@@ -117,13 +117,13 @@ class mssqlSink(SQLSink):
         for record in records:
             insert_record = {column.name: None for column in columns}
             for key in record.keys():
-                conformed_name = self.conform_name(key, "column")
-                if conformed_name in insert_record:
-                    insert_record[conformed_name] = record[key]
+                conformed_name = self.conform_name(key)
+                insert_record[conformed_name] = record[key]
 
             insert_records.append(insert_record)
 
-        self.connection.execute(insert_sql, records)
+        # self.logger.debug("BULK INSERT RECORDS: %s", insert_records)
+        self.connection.execute(insert_sql, insert_records)
 
         if isinstance(records, list):
             metric = {"type": "counter", "metric": "record_count", "value": len(records),
@@ -191,7 +191,7 @@ class mssqlSink(SQLSink):
             self.merge_upsert_from_table(
                 from_table_name=tmp_table_name,
                 to_table_name=self.full_table_name,
-                schema=self.schema,
+                schema=self.conform_schema(self.schema),
                 join_keys=self.key_properties,
             )
 
