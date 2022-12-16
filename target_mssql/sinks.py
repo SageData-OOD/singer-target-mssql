@@ -127,7 +127,7 @@ class mssqlSink(SQLSink):
 
         if isinstance(records, list):
             metric = {"type": "counter", "metric": "record_count", "value": len(records),
-                    "tags": {"count_type": "table_rows_persisted", "table": full_table_name}}
+                    "tags": {"count_type": "table_rows_persisted", "table": self.full_table_name}}
             print(f"INFO METRIC: {json.dumps(metric)}")
 
             return len(records)  # If list, we can quickly return record count.
