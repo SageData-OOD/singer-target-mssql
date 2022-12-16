@@ -349,9 +349,9 @@ class mssqlConnector(SQLConnector):
             )
 
         if self._jsonschema_type_check(jsonschema_type, ("integer",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.INTEGER())
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.BIGINT())
         if self._jsonschema_type_check(jsonschema_type, ("number",)):
-            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.NUMERIC(22, 16))
+            return cast(sqlalchemy.types.TypeEngine, sqlalchemy.types.NUMERIC(28,6))
         if self._jsonschema_type_check(jsonschema_type, ("boolean",)):
             return cast(sqlalchemy.types.TypeEngine, mssql.VARCHAR(1))
 

@@ -1,8 +1,10 @@
 """mssql target sink class, which handles writing streams."""
 
 from __future__ import annotations
-
+import json
+import sys
 from typing import Any, Dict, Iterable, List, Optional
+
 
 import sqlalchemy
 from singer_sdk.sinks import SQLSink
@@ -24,6 +26,18 @@ class mssqlSink(SQLSink):
             The connector object.
         """
         return self._connector
+
+    @property
+    def table_name(self) -> str:
+        """Return the table name, with no schema or database part.
+
+        Returns:
+            The target table name.
+        """
+        prefix = self.config.get("tables_prefix", "")
+        
+        return prefix + SQLSink.table_name.fget(self)
+
 
     @property
     def schema_name(self) -> Optional[str]:
@@ -101,14 +115,21 @@ class mssqlSink(SQLSink):
         # temporary fix to ensure missing properties are added
         insert_records = []
         for record in records:
-            insert_record = {}
-            for column in columns:
-                insert_record[column.name] = record.get(column.name)
+            insert_record = {column.name: None for column in columns}
+            for key in record.keys():
+                conformed_name = self.conform_name(key, "column")
+                if conformed_name in insert_record:
+                    insert_record[conformed_name] = record[key]
+
             insert_records.append(insert_record)
 
-        self.connection.execute(insert_sql, insert_records)
+        self.connection.execute(insert_sql, records)
 
         if isinstance(records, list):
+            metric = {"type": "counter", "metric": "record_count", "value": len(records),
+                    "tags": {"count_type": "table_rows_persisted", "table": full_table_name}}
+            print(f"INFO METRIC: {json.dumps(metric)}")
+
             return len(records)  # If list, we can quickly return record count.
 
         return None  # Unknown record count.
