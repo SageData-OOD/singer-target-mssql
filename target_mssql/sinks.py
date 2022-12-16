@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 import json
-import sys
-from typing import Any, Dict, Iterable, List, Optional
+from textwrap import dedent
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 
 import sqlalchemy
+from sqlalchemy.sql import Executable
 from singer_sdk.sinks import SQLSink
 from sqlalchemy import Column
 
@@ -35,7 +36,7 @@ class mssqlSink(SQLSink):
             The target table name.
         """
         prefix = self.config.get("tables_prefix", "")
-        
+
         return prefix + SQLSink.table_name.fget(self)
 
 
@@ -77,7 +78,9 @@ class mssqlSink(SQLSink):
         keys = record.keys()
         for key in keys:
             if type(record[key]) is list:
-                record[key] = str(record[key])
+                record[key] = json.dumps(record[key])
+            elif type(record[key]) is dict:
+                record[key] = json.dumps(record[key])
 
         return record
 
@@ -118,7 +121,8 @@ class mssqlSink(SQLSink):
             insert_record = {column.name: None for column in columns}
             for key in record.keys():
                 conformed_name = self.conform_name(key)
-                insert_record[conformed_name] = record[key]
+                if conformed_name in insert_record:
+                    insert_record[conformed_name] = record[key]
 
             insert_records.append(insert_record)
 
@@ -228,7 +232,7 @@ class mssqlSink(SQLSink):
 
         update_stmt = ", ".join(
             [
-                f"target.{key} = temp.{key}"
+                f'target."{key}" = temp."{key}"'
                 for key in schema["properties"].keys()
                 if key not in join_keys
             ]
@@ -242,13 +246,37 @@ class mssqlSink(SQLSink):
                 UPDATE SET
                     { update_stmt }
             WHEN NOT MATCHED THEN
-                INSERT ({", ".join(schema["properties"].keys())})
-                VALUES ({", ".join([f"temp.{key}" for key in schema["properties"].keys()])});
+                INSERT ({", ".join(map(lambda key: f'"{key}"', schema["properties"].keys()))})
+                VALUES ({", ".join([f'temp."{key}"' for key in schema["properties"].keys()])});
         """
 
         self.connection.execute(merge_sql)
 
         self.connection.execute("COMMIT")
+
+    def generate_insert_statement(
+        self,
+        full_table_name: str,
+        schema: dict,
+    ) -> Union[str, Executable]:
+        """Generate an insert statement for the given records.
+
+        Args:
+            full_table_name: the target table name.
+            schema: the JSON schema for the new table.
+
+        Returns:
+            An insert statement.
+        """
+        property_names = list(self.conform_schema(schema)["properties"].keys())
+        statement = dedent(
+            f"""\
+            INSERT INTO {full_table_name}
+            ({", ".join(map(lambda key: f'"{key}"', property_names))})
+            VALUES ({", ".join([f":{name}" for name in property_names])})
+            """
+        )
+        return statement.rstrip()
 
     def parse_full_table_name(
         self, full_table_name: str
